@@ -1,0 +1,28 @@
+# MATLAB
+*.asv
+*.m~
+*.mat
+*.fig
+*.slx
+*.slxc
+*.mdl
+*.rpt
+html/
+*.html
+
+# Simulink
+sim_model_slx.er*
+
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Claude
+.claude/
