@@ -8,9 +8,11 @@
 *.mdl
 *.rpt
 html/
-*.html
+# Allow the interactive presentation HTML
+!code/web/index.html
 
 # Simulink
+slprj/
 sim_model_slx.er*
 
 

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>差速驱动轮电机系统设计 | 电气传动及控制基础</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a1628;
+    --bg-card: #0f1d32;
+    --border: #1e3a5f;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --accent-i: #00d4ff;
+    --accent-n: #ff6b35;
+    --accent-e: #00c853;
+    --accent-warn: #ffc107;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Navigation */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: rgba(10,22,40,0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px; height: 60px;
+  }
+  nav .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: 1px; color: var(--text); }
+  nav .logo span { color: var(--accent-i); }
+  nav .links { display: flex; gap: 28px; }
+  nav .links a {
+    color: var(--text-muted); text-decoration: none; font-size: 0.9rem;
+    transition: color 0.3s; position: relative;
+  }
+  nav .links a:hover, nav .links a.active { color: var(--text); }
+  nav .links a.active::after {
+    content: ''; position: absolute; bottom: -18px; left: 0; right: 0;
+    height: 2px; background: var(--accent-i);
+  }
+
+  /* Sections */
+  section { padding: 100px 40px 60px; max-width: 1200px; margin: 0 auto; }
+  h2 {
+    font-size: 2rem; margin-bottom: 12px; font-weight: 700;
+    background: linear-gradient(90deg, var(--text), var(--accent-i));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subtitle { color: var(--text-muted); margin-bottom: 40px; font-size: 1rem; }
+
+  /* Hero */
+  #hero {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding-top: 60px;
+  }
+  #hero .hero-content { max-width: 800px; }
+  #hero h1 {
+    font-size: 3rem; font-weight: 800; margin-bottom: 16px;
+    background: linear-gradient(90deg, #fff, var(--accent-i), var(--accent-n));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  #hero p { font-size: 1.2rem; color: var(--text-muted); margin-bottom: 40px; }
+  #hero .params {
+    display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; margin-top: 40px;
+  }
+  #hero .param-item {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 28px; min-width: 160px;
+    transition: transform 0.3s, border-color 0.3s;
+  }
+  #hero .param-item:hover { transform: translateY(-4px); border-color: var(--accent-i); }
+  #hero .param-item .val {
+    font-size: 1.8rem; font-weight: 700; color: var(--accent-i);
+  }
+  #hero .param-item .label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+
+  /* Rotor Animation */
+  .rotor-wrap {
+    width: 180px; height: 180px; margin: 0 auto 40px; position: relative;
+  }
+  .rotor {
+    width: 100%; height: 100%; border-radius: 50%;
+    border: 3px solid var(--border);
+    background: conic-gradient(from 0deg, var(--accent-i), var(--accent-n), var(--accent-e), var(--accent-i));
+    animation: spin 4s linear infinite;
+    position: relative;
+  }
+  .rotor::before {
+    content: ''; position: absolute; inset: 15px; border-radius: 50%;
+    background: var(--bg); border: 2px dashed var(--border);
+  }
+  .rotor::after {
+    content: ''; position: absolute; inset: 45px; border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-i) 0%, transparent 70%);
+    opacity: 0.3; animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100%{transform:scale(1);opacity:.3;} 50%{transform:scale(1.1);opacity:.5;} }
+
+  /* Cards */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px; transition: all 0.3s;
+  }
+  .card:hover { border-color: var(--accent-i); transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,212,255,0.05); }
+  .card h3 { font-size: 1.1rem; margin-bottom: 12px; color: var(--text); }
+  .card .metric { display: flex; justify-content: space-between; margin: 8px 0; font-size: 0.9rem; }
+  .card .metric .k { color: var(--text-muted); }
+  .card .metric .v { font-weight: 600; }
+
+  /* Motor selection cards */
+  .motor-cards { display: flex; gap: 16px; flex-wrap: wrap; }
+  .motor-card {
+    flex: 1; min-width: 240px; background: var(--bg-card); border: 2px solid var(--border);
+    border-radius: 16px; padding: 24px; cursor: pointer; transition: all 0.3s; position: relative;
+  }
+  .motor-card:hover { border-color: var(--accent-i); }
+  .motor-card.active { border-color: var(--accent-i); background: rgba(0,212,255,0.05); }
+  .motor-card .badge {
+    position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: 600; background: var(--border); color: var(--text-muted);
+  }
+  .motor-card.active .badge { background: var(--accent-i); color: var(--bg); }
+  .motor-card h4 { font-size: 1.1rem; margin-bottom: 16px; }
+  .score-bar { height: 6px; border-radius: 3px; background: var(--border); margin-top: 6px; overflow: hidden; }
+  .score-bar .fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+  /* Slider */
+  .slider-wrap { margin: 30px 0; }
+  .slider-wrap label { display: block; margin-bottom: 10px; font-weight: 600; }
+  input[type=range] {
+    -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px;
+    background: var(--border); outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent-i); cursor: pointer; box-shadow: 0 0 10px rgba(0,212,255,0.5);
+  }
+  .slider-output { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
+  .slider-output .out {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; flex: 1; min-width: 150px; text-align: center;
+  }
+  .slider-output .out .num { font-size: 1.5rem; font-weight: 700; color: var(--accent-i); }
+  .slider-output .out .desc { font-size: 0.8rem; color: var(--text-muted); }
+
+  /* Charts */
+  .chart-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin: 20px 0; }
+  .chart-wrap canvas { max-height: 320px; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 500; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  td.v { font-weight: 600; color: var(--accent-i); }
+
+  /* Status indicators */
+  .status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status.ok { background: var(--accent-e); }
+  .status.warn { background: var(--accent-warn); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    nav .links { display: none; }
+    #hero h1 { font-size: 2rem; }
+    section { padding: 80px 20px 40px; }
+    .motor-cards { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">ROBOT<span>SERVO</span></div>
+  <div class="links">
+    <a href="#hero" class="active">概览</a>
+    <a href="#load">负载分析</a>
+    <a href="#motor">电机选型</a>
+    <a href="#controller">控制器</a>
+    <a href="#efficiency">效率分析</a>
+    <a href="#summary">参数汇总</a>
+  </div>
+</nav>
+
+<!-- ==================== HERO ==================== -->
+<section id="hero">
+  <div class="hero-content">
+    <div class="rotor-wrap">
+      <div class="rotor"></div>
+    </div>
+    <h1>差速驱动轮电机系统</h1>
+    <p>仓储分拣机器人伺服驱动控制系统设计 | AB=04 CD=76</p>
+    <div class="params">
+      <div class="param-item">
+        <div class="val" id="h-nlow">64</div>
+        <div class="label">低速靠站 rpm</div>
+      </div>
+      <div class="param-item">
+        <div class="val" id="h-nhigh">316</div>
+        <div class="label">通道巡航 rpm</div>
+      </div>
+      <div class="param-item">
+        <div class="val" id="h-vbus">48</div>
+        <div class="label">直流母线 V</div>
+      </div>
+      <div class="param-item">
+        <div class="val" id="h-pmax">150</div>
+        <div class="label">单轮功率 W</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== LOAD ANALYSIS ==================== -->
+<section id="load">
+  <h2>负载力学分析</h2>
+  <p class="subtitle">50kg 整机质量，5°最大坡度，单轮分担牵引力</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h3>平路匀速</h3>
+      <div class="metric"><span class="k">滚动阻力</span><span class="v">9.81 N</span></div>
+      <div class="metric"><span class="k">轮端转矩</span><span class="v">0.785 Nm</span></div>
+      <div class="metric"><span class="k">电机轴转矩</span><span class="v">0.087 Nm</span></div>
+    </div>
+    <div class="card" style="border-color: var(--accent-n);">
+      <h3 style="color: var(--accent-n);">坡道上行（最恶劣工况）</h3>
+      <div class="metric"><span class="k">总阻力</span><span class="v">31.15 N</span></div>
+      <div class="metric"><span class="k">轮端转矩</span><span class="v">2.492 Nm</span></div>
+      <div class="metric"><span class="k">电机轴转矩</span><span class="v" style="color: var(--accent-n);">0.277 Nm</span></div>
+    </div>
+    <div class="card">
+      <h3>坡道下行</h3>
+      <div class="metric"><span class="k">净驱动力</span><span class="v">11.60 N</span></div>
+      <div class="metric"><span class="k">轮端转矩</span><span class="v">0.928 Nm</span></div>
+      <div class="metric"><span class="k">制动转矩</span><span class="v">0.103 Nm</span></div>
+    </div>
+  </div>
+
+  <div class="chart-wrap" style="margin-top: 30px;">
+    <canvas id="loadChart"></canvas>
+  </div>
+</section>
+
+<!-- ==================== GEAR RATIO ==================== -->
+<section id="gear">
+  <h2>减速比选型</h2>
+  <p class="subtitle">拖动滑块实时查看不同减速比下的电机需求参数</p>
+
+  <div class="slider-wrap">
+    <label>减速比 i = <span id="ratioVal" style="color:var(--accent-i);font-size:1.3rem;font-weight:700;">10</span> : 1</label>
+    <input type="range" id="ratioSlider" min="5" max="20" step="1" value="10">
+    <div class="slider-output">
+      <div class="out"><div class="num" id="out-nm">3160</div><div class="desc">电机转速 rpm</div></div>
+      <div class="out"><div class="num" id="out-ts">0.277</div><div class="desc">稳态转矩 Nm</div></div>
+      <div class="out"><div class="num" id="out-tp">0.947</div><div class="desc">峰值转矩 Nm</div></div>
+      <div class="out"><div class="num" id="out-pp">313.4</div><div class="desc">峰值功率 W</div></div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <canvas id="ratioChart"></canvas>
+  </div>
+</section>
+
+<!-- ==================== MOTOR SELECTION ==================== -->
+<section id="motor">
+  <h2>电机选型对比</h2>
+  <p class="subtitle">点击卡片查看各方案评分详情，BLDC 综合评分最高（8.45分）</p>
+
+  <div class="motor-cards">
+    <div class="motor-card active" onclick="selectMotor(0)">
+      <span class="badge">推荐</span>
+      <h4>BLDC 无刷直流</h4>
+      <div class="metric"><span class="k">额定转矩</span><span class="v">0.450 Nm</span></div>
+      <div class="metric"><span class="k">额定转速</span><span class="v">3200 rpm</span></div>
+      <div class="metric"><span class="k">额定功率</span><span class="v">150 W</span></div>
+      <div class="metric"><span class="k">效率</span><span class="v">85%</span></div>
+      <div class="metric"><span class="k">成本</span><span class="v">~600 元</span></div>
+      <div style="margin-top:12px;font-size:0.85rem;color:var(--text-muted);">综合评分</div>
+      <div class="score-bar"><div class="fill" style="width:84.5%;background:var(--accent-i)"></div></div>
+    </div>
+    <div class="motor-card" onclick="selectMotor(1)">
+      <span class="badge">备选</span>
+      <h4>直流有刷电机</h4>
+      <div class="metric"><span class="k">额定转矩</span><span class="v">0.479 Nm</span></div>
+      <div class="metric"><span class="k">额定转速</span><span class="v">3000 rpm</span></div>
+      <div class="metric"><span class="k">额定功率</span><span class="v">150 W</span></div>
+      <div class="metric"><span class="k">效率</span><span class="v">80%</span></div>
+      <div class="metric"><span class="k">成本</span><span class="v">~400 元</span></div>
+      <div style="margin-top:12px;font-size:0.85rem;color:var(--text-muted);">综合评分</div>
+      <div class="score-bar"><div class="fill" style="width:81.5%;background:var(--accent-n)"></div></div>
+    </div>
+    <div class="motor-card" onclick="selectMotor(2)">
+      <span class="badge">超纲</span>
+      <h4>PMSM 永磁同步</h4>
+      <div class="metric"><span class="k">额定转矩</span><span class="v">0.640 Nm</span></div>
+      <div class="metric"><span class="k">额定转速</span><span class="v">3000 rpm</span></div>
+      <div class="metric"><span class="k">额定功率</span><span class="v">200 W</span></div>
+      <div class="metric"><span class="k">效率</span><span class="v">92%</span></div>
+      <div class="metric"><span class="k">成本</span><span class="v">~1200 元</span></div>
+      <div style="margin-top:12px;font-size:0.85rem;color:var(--text-muted);">综合评分</div>
+      <div class="score-bar"><div class="fill" style="width:72%;background:var(--accent-e)"></div></div>
+    </div>
+  </div>
+
+  <div class="chart-wrap" style="margin-top: 30px;">
+    <canvas id="motorChart"></canvas>
+  </div>
+</section>
+
+<!-- ==================== CONTROLLER ==================== -->
+<section id="controller">
+  <h2>双闭环控制器设计</h2>
+  <p class="subtitle">电流环典型 I 型系统 + 转速环典型 II 型系统（h=5）</p>
+
+  <div class="card-grid">
+    <div class="card" style="border-left: 4px solid var(--accent-i);">
+      <h3 style="color: var(--accent-i);">电流环 ACR（内环）</h3>
+      <div class="metric"><span class="k">Kp_i</span><span class="v">0.0540</span></div>
+      <div class="metric"><span class="k">Ki_i</span><span class="v">43.21</span></div>
+      <div class="metric"><span class="k">tau_i</span><span class="v">0.00125 s</span></div>
+      <div class="metric"><span class="k">截止频率</span><span class="v">246.9 rad/s</span></div>
+      <div class="metric"><span class="k">相位裕度</span><span class="v" style="color:var(--accent-e)">89.6°</span></div>
+    </div>
+    <div class="card" style="border-left: 4px solid var(--accent-n);">
+      <h3 style="color: var(--accent-n);">转速环 ASR（外环）</h3>
+      <div class="metric"><span class="k">Kp_n</span><span class="v">35.46</span></div>
+      <div class="metric"><span class="k">Ki_n</span><span class="v">783.56</span></div>
+      <div class="metric"><span class="k">tau_n</span><span class="v">0.0452 s</span></div>
+      <div class="metric"><span class="k">截止频率</span><span class="v">18.4 rad/s</span></div>
+      <div class="metric"><span class="k">相位裕度</span><span class="v" style="color:var(--accent-e)">38.6°</span></div>
+    </div>
+  </div>
+
+  <div class="chart-wrap" style="margin-top: 30px;">
+    <div style="text-align:center; color:var(--text-muted); padding: 40px 0;">
+      <p>Bode 图分析</p>
+      <p style="font-size:0.85rem; margin-top:8px;">电流环：增益裕度 Inf dB，相位裕度 89.6°</p>
+      <p style="font-size:0.85rem;">转速环：增益裕度 14.6 dB，相位裕度 38.6°</p>
+      <p style="font-size:0.85rem; margin-top:16px; color:var(--accent-warn);">注意：惯量比 106.7 偏大，转速环已做稳定性补偿</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== EFFICIENCY ==================== -->
+<section id="efficiency">
+  <h2>效率与损耗分析</h2>
+  <p class="subtitle">额定工况（坡道巡航），系统总效率 70.6%</p>
+
+  <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px;">
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2.5rem; font-weight:700; color:var(--accent-i);">99.5%</div>
+      <div style="color:var(--text-muted); font-size:0.9rem;">逆变器效率</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2.5rem; font-weight:700; color:var(--accent-n);">78.8%</div>
+      <div style="color:var(--text-muted); font-size:0.9rem;">电机效率</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2.5rem; font-weight:700; color:var(--accent-e);">90.0%</div>
+      <div style="color:var(--text-muted); font-size:0.9rem;">减速器效率</div>
+    </div>
+    <div class="card" style="text-align:center; border-color:var(--accent-e);">
+      <div style="font-size:2.5rem; font-weight:700; color:var(--accent-e);">70.6%</div>
+      <div style="color:var(--text-muted); font-size:0.9rem;">系统总效率</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div class="chart-wrap">
+      <canvas id="lossPieChart"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="lossBarChart"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SUMMARY ==================== -->
+<section id="summary">
+  <h2>关键参数汇总</h2>
+  <p class="subtitle">差速驱动轮电机系统完整设计参数</p>
+
+  <div class="chart-wrap" style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>参数</th><th>数值</th><th>单位</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>整车质量</td><td class="v">50</td><td>kg</td><td>两侧独立驱动</td></tr>
+        <tr><td>驱动轮半径</td><td class="v">0.08</td><td>m</td><td>忽略轮胎变形</td></tr>
+        <tr><td>最大坡度</td><td class="v">5</td><td>°</td><td>上行/下行制动</td></tr>
+        <tr><td>减速比</td><td class="v">10</td><td>:1</td><td>单级行星齿轮</td></tr>
+        <tr><td>低速靠站轮速</td><td class="v">64</td><td>rpm</td><td>AB=04, 60+AB</td></tr>
+        <tr><td>通道巡航轮速</td><td class="v">316</td><td>rpm</td><td>CD=76, 240+CD</td></tr>
+        <tr><td>电机额定转速</td><td class="v">3200</td><td>rpm</td><td>BLDC 等效模型</td></tr>
+        <tr><td>电机额定转矩</td><td class="v">0.450</td><td>Nm</td><td>裕量 63%</td></tr>
+        <tr><td>直流母线电压</td><td class="v">48</td><td>V</td><td>电池供电</td></tr>
+        <tr><td>单轮连续功率</td><td class="v">150</td><td>W</td><td>2倍过载 10s</td></tr>
+        <tr><td>电流环 Kp</td><td class="v">0.0540</td><td></td><td>典型 I 型系统</td></tr>
+        <tr><td>电流环 Ki</td><td class="v">43.21</td><td></td><td>KT=0.5</td></tr>
+        <tr><td>转速环 Kp</td><td class="v">35.46</td><td></td><td>典型 II 型系统</td></tr>
+        <tr><td>转速环 Ki</td><td class="v">783.56</td><td></td><td>h=5</td></tr>
+        <tr><td>系统总效率</td><td class="v">70.6</td><td>%</td><td>坡道巡航工况</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="text-align:center; margin-top: 60px; padding: 30px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem;">
+    <p>仓储分拣机器人差速驱动轮电机系统设计</p>
+    <p>学号 1120230476 | AB=04 CD=76 | 2026</p>
+  </div>
+</section>
+
+<script>
+/* ==================== Navigation Active State ==================== */
+const sections = document.querySelectorAll('section');
+const navLinks = document.querySelectorAll('nav .links a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(sec => {
+    const top = window.scrollY;
+    const offset = sec.offsetTop - 100;
+    if (top >= offset) current = sec.getAttribute('id');
+  });
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+  });
+});
+
+/* ==================== Chart Defaults ==================== */
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#1e3a5f';
+
+/* ==================== Load Chart ==================== */
+new Chart(document.getElementById('loadChart'), {
+  type: 'bar',
+  data: {
+    labels: ['平路匀速', '坡道上行', '坡道下行'],
+    datasets: [
+      { label: '轮端转矩 [Nm]', data: [0.785, 2.492, 0.928], backgroundColor: '#00d4ff' },
+      { label: '电机轴转矩 [Nm]', data: [0.087, 0.277, 0.103], backgroundColor: '#ff6b35' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' }, title: { display: true, text: '各工况负载力矩对比（单轮）' } },
+    scales: { y: { beginAtZero: true, grid: { color: '#1e3a5f' } }, x: { grid: { display: false } } }
+  }
+});
+
+/* ==================== Ratio Slider ==================== */
+const ratioSlider = document.getElementById('ratioSlider');
+const ratioVal = document.getElementById('ratioVal');
+const outNm = document.getElementById('out-nm');
+const outTs = document.getElementById('out-ts');
+const outTp = document.getElementById('out-tp');
+const outPp = document.getElementById('out-pp');
+
+const J_wheel = 0.16, J_gear = 5e-6, J_motor = 1.5e-5;
+const T_w_slope = 2.4918, alpha_w_need = 41.36, eta_gear = 0.90;
+const n_high = 316, P_peak_limit = 300;
+
+function updateRatio(i) {
+  ratioVal.textContent = i;
+  const n_m = n_high * i;
+  const T_steady = T_w_slope / (i * eta_gear);
+  const J_load = J_wheel / (i*i);
+  const J_total = J_motor + J_gear + J_load;
+  const alpha_m = alpha_w_need * i;
+  const T_acc = J_total * alpha_m;
+  const T_peak = T_steady + T_acc;
+  const omega_m = n_m * 2 * Math.PI / 60;
+  const P_peak = T_peak * omega_m;
+
+  outNm.textContent = n_m;
+  outTs.textContent = T_steady.toFixed(3);
+  outTp.textContent = T_peak.toFixed(3);
+  outPp.textContent = P_peak.toFixed(1);
+
+  if (P_peak > P_peak_limit) {
+    outPp.style.color = 'var(--accent-warn)';
+  } else {
+    outPp.style.color = 'var(--accent-i)';
+  }
+}
+
+ratioSlider.addEventListener('input', e => updateRatio(parseInt(e.target.value)));
+
+/* ==================== Ratio Chart ==================== */
+const ratios = [5, 8, 10, 12, 15, 20];
+const ratioData = ratios.map(i => {
+  const n_m = n_high * i;
+  const T_steady = T_w_slope / (i * eta_gear);
+  const J_load = J_wheel / (i*i);
+  const J_total = J_motor + J_gear + J_load;
+  const alpha_m = alpha_w_need * i;
+  const T_acc = J_total * alpha_m;
+  const T_peak = T_steady + T_acc;
+  const omega_m = n_m * 2 * Math.PI / 60;
+  const P_peak = T_peak * omega_m;
+  return { n_m, T_steady, T_peak, P_peak };
+});
+
+new Chart(document.getElementById('ratioChart'), {
+  type: 'line',
+  data: {
+    labels: ratios.map(r => r + ':1'),
+    datasets: [
+      { label: '稳态转矩 [Nm]', data: ratioData.map(d => d.T_steady), borderColor: '#00d4ff', backgroundColor: '#00d4ff33', fill: true, tension: 0.3 },
+      { label: '峰值转矩 [Nm]', data: ratioData.map(d => d.T_peak), borderColor: '#ff6b35', backgroundColor: '#ff6b3533', fill: true, tension: 0.3 },
+      { label: '峰值功率 [W]', data: ratioData.map(d => d.P_peak), borderColor: '#00c853', backgroundColor: '#00c85333', fill: true, tension: 0.3, yAxisID: 'y1' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { title: { display: true, text: '不同减速比下的电机需求参数' } },
+    scales: {
+      y: { type: 'linear', display: true, position: 'left', title: { display: true, text: '转矩 [Nm]' } },
+      y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: '功率 [W]' }, grid: { drawOnChartArea: false } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+/* ==================== Motor Selection ==================== */
+function selectMotor(idx) {
+  document.querySelectorAll('.motor-card').forEach((c, i) => {
+    c.classList.toggle('active', i === idx);
+    c.querySelector('.badge').textContent = i === idx ? '已选' : (i === 0 ? '推荐' : (i === 1 ? '备选' : '超纲'));
+  });
+}
+
+new Chart(document.getElementById('motorChart'), {
+  type: 'radar',
+  data: {
+    labels: ['性能匹配', '效率', '成本', '可靠性', '课程匹配'],
+    datasets: [
+      { label: 'BLDC', data: [9, 8, 7, 9, 9], borderColor: '#00d4ff', backgroundColor: '#00d4ff33' },
+      { label: 'DC Brushed', data: [8, 7, 9, 6, 10], borderColor: '#ff6b35', backgroundColor: '#ff6b3533' },
+      { label: 'PMSM', data: [9, 9, 4, 9, 5], borderColor: '#00c853', backgroundColor: '#00c85333' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { title: { display: true, text: '电机方案多维度评分对比（满分10分）' } },
+    scales: { r: { min: 0, max: 10, ticks: { stepSize: 2 } } }
+  }
+});
+
+/* ==================== Loss Charts ==================== */
+new Chart(document.getElementById('lossPieChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['电机铜耗', '电机铁耗', '机械损耗', 'MOSFET损耗', '驱动+二极管', '减速器损耗'],
+    datasets: [{ data: [14.70, 4.50, 5.48, 0.36, 0.18, 9.16], backgroundColor: ['#00d4ff','#00c853','#ff6b35','#ffc107','#8e44ad','#3498db'] }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { title: { display: true, text: '损耗分布（额定工况，单位：W）' }, legend: { position: 'right' } }
+  }
+});
+
+new Chart(document.getElementById('lossBarChart'), {
+  type: 'bar',
+  data: {
+    labels: ['逆变器', '电机', '减速器'],
+    datasets: [{ label: '损耗 [W]', data: [0.54, 24.68, 9.16], backgroundColor: ['#00d4ff','#ff6b35','#00c853'] }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { title: { display: true, text: '分类损耗对比' } },
+    scales: { y: { beginAtZero: true } }
+  }
+});
+</script>
+</body>
+</html>

@@ -115,8 +115,12 @@ T_sigma_n = T_cl_i + T_on;
 
 h = 5;
 
+% alpha 单位转换: V/rpm -> V/(rad/s)
+alpha_rad = alpha * 60 / (2*pi);
+
 tau_n = h * T_sigma_n;
-Kp_n = J_sys * beta / (alpha * Kt * (h+1) * T_sigma_n) * (2*pi/60);
+% 典型 II 型系统整定公式
+Kp_n = (h+1) * J_sys * beta / (2 * h * T_sigma_n * alpha_rad * Kt);
 Ki_n = Kp_n / tau_n;
 
 ctrl.Kp_n = Kp_n;
@@ -151,7 +155,8 @@ W_cl_i = feedback(ACR * G_pwm * G_elec, beta);
 ASR = Kp_n * (tau_n*s + 1) / (tau_n*s);
 G_on = 1 / (T_on*s + 1);
 G_mech = Kt / (J_sys * s);
-W_open_n = ASR * G_on * W_cl_i * G_mech * alpha;
+% alpha_rad 用于Bode图计算，保证单位一致 (rad/s)
+W_open_n = ASR * G_on * W_cl_i * G_mech * alpha_rad;
 
 figure('Name', '双闭环 Bode 图分析', 'Position', [100 100 1200 800]);
 
